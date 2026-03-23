@@ -39,7 +39,7 @@
         <p class="text-sm text-gray-600 text-center whitespace-pre-wrap leading-relaxed mb-8 w-full">{{ profile.個人簡介文字 }}</p>
 
         <button @click="shareMyCard" class="w-full bg-[#06C755] hover:bg-[#05b34c] text-white font-bold py-4 rounded-2xl mb-6 shadow-md transition flex items-center justify-center gap-2 transform hover:scale-[1.02]">
-          <i class="ph-fill ph-chat-circle-text text-xl"></i> 將我的電子名片傳到 LINE
+          <i class="ph-fill ph-chat-circle-text text-xl"></i> {{ shareButtonText }}
         </button>
 
         <div class="w-full space-y-3">
@@ -73,6 +73,9 @@
         const flexMsg = ref(null);
         const isLoading = ref(true);
         const errorMessage = ref('');
+        
+        // 🌟 優化：這裡可以自由修改綠色按鈕上顯示的文字
+        const shareButtonText = ref("將我的電子名片傳到 LINE");
 
         onMounted(async () => {
           try {
@@ -109,33 +112,44 @@
           }
         });
 
+        // 🌟 優化：強化防呆機制的分享功能
         const shareMyCard = async () => {
-          if (!liff.isLoggedIn()) {
-            liff.login({ redirectUri: window.location.href });
-            return;
-          }
+          try {
+            // 1. 如果在一般瀏覽器(Chrome/Safari)打開，自動引導使用者登入 LINE
+            if (!liff.isLoggedIn()) {
+              liff.login({ redirectUri: window.location.href });
+              return; 
+            }
 
-          if (liff.isApiAvailable('shareTargetPicker') && flexMsg.value) {
-            try {
+            // 2. 確保 Flex Message 資料已從 GAS 取回
+            if (!flexMsg.value) {
+              alert("名片資料尚未準備好，請稍候再試。");
+              return;
+            }
+
+            // 3. 呼叫分享目標選擇器 (Share Target Picker)
+            if (liff.isApiAvailable('shareTargetPicker')) {
               const res = await liff.shareTargetPicker([{
                 "type": "flex",
-                "altText": `這是 ${profile.value.顯示名稱} 的數位名片，請查收！`,
+                "altText": `這是 ${profile.value.顯示名稱 || '我'} 的電子名片，請查收！`, // 優化了替代文字
                 "contents": flexMsg.value
               }]);
               
               if (res) {
                 alert("✨ 名片已成功發送到聊天室！");
               }
-            } catch (err) {
-              console.error("分享失敗，原因:", err);
-              alert("傳送失敗，請確認資料設定是否正確，或稍後再試。");
+            } else {
+              // 萬一權限沒開，給予明確提示
+              alert("目前無法使用分享功能。請確認 LINE Developers Console 中是否已開啟「Share Target Picker」權限。");
             }
-          } else {
-            alert("請在手機的 LINE App 內開啟此網頁，才能使用轉發功能喔！");
+          } catch (err) {
+            console.error("分享失敗，原因:", err);
+            alert("傳送失敗，請確認資料設定是否正確，或稍後再試。");
           }
         };
 
-        return { profile, buttons, isLoading, errorMessage, shareMyCard };
+        // 記得將 shareButtonText 暴露給模板使用
+        return { profile, buttons, isLoading, errorMessage, shareButtonText, shareMyCard };
       }
     }).mount('#app');
   </script>
