@@ -62,7 +62,6 @@
   <script>
     const { createApp, ref, onMounted } = Vue;
 
-    // ⚠️ 務必填入「重新部署後」的新 GAS URL
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzVcMLPTZ41rZebfLtjBXNuTdxPyZDkatjSHILCVk2GtYXPNbLxMBqDI1hhTROuECDEPw/exec";
     const LIFF_ID = "2009561347-VUhbtrEC";
 
@@ -73,9 +72,39 @@
         const flexMsg = ref(null);
         const isLoading = ref(true);
         const errorMessage = ref('');
-        
-        // 🌟 優化：這裡可以自由修改綠色按鈕上顯示的文字
         const shareButtonText = ref("傳送E-LINE-CARD");
+
+        const shareMyCard = async () => {
+          try {
+            if (!liff.isLoggedIn()) {
+              liff.login({ redirectUri: window.location.href });
+              return; 
+            }
+
+            if (!flexMsg.value) {
+              alert("名片資料尚未準備好，請稍候再試。");
+              return;
+            }
+
+            if (liff.isApiAvailable('shareTargetPicker')) {
+              const res = await liff.shareTargetPicker([{
+                "type": "flex",
+                "altText": `這是 ${profile.value.顯示名稱 || '我'} 的電子名片，請查收！`, 
+                "contents": flexMsg.value
+              }]);
+              
+              if (res) {
+                // 發送成功後可以選擇關閉視窗，讓流程更順暢 (可選)
+                // liff.closeWindow(); 
+              }
+            } else {
+              alert("目前無法使用分享功能。請確認 LINE Developers Console 中是否已開啟「Share Target Picker」權限。");
+            }
+          } catch (err) {
+            console.error("分享失敗，原因:", err);
+            alert("傳送失敗，請確認資料設定是否正確，或稍後再試。");
+          }
+        };
 
         onMounted(async () => {
           try {
@@ -86,6 +115,9 @@
 
           const urlParams = new URLSearchParams(window.location.search);
           const memberId = urlParams.get('id');
+          
+          // 🌟 讀取 autoShare 參數，判斷是否需要自動喚起分享功能
+          const isAutoShare = urlParams.get('autoShare') === 'true';
 
           if (!memberId) {
             errorMessage.value = '網址錯誤：缺少專屬會員 ID';
@@ -101,7 +133,15 @@
               profile.value = data.profile;
               buttons.value = data.buttons;
               flexMsg.value = data.flexMsg;
-              document.title = `${data.profile.顯示名稱} 的E-LINE-CARD`;
+              document.title = `${data.profile.顯示名稱} 的數位名片`;
+
+              // 🌟 如果帶有 autoShare 參數，等待 UI 載入後自動彈出選擇好友視窗
+              if (isAutoShare) {
+                  setTimeout(() => {
+                      shareMyCard();
+                  }, 800); // 稍微延遲 0.8 秒確保資料綁定與畫面繪製完成
+              }
+
             } else {
               errorMessage.value = data.message || '無法載入名片資料';
             }
@@ -112,43 +152,6 @@
           }
         });
 
-        // 🌟 優化：強化防呆機制的分享功能
-        const shareMyCard = async () => {
-          try {
-            // 1. 如果在一般瀏覽器(Chrome/Safari)打開，自動引導使用者登入 LINE
-            if (!liff.isLoggedIn()) {
-              liff.login({ redirectUri: window.location.href });
-              return; 
-            }
-
-            // 2. 確保 Flex Message 資料已從 GAS 取回
-            if (!flexMsg.value) {
-              alert("名片資料尚未準備好，請稍候再試。");
-              return;
-            }
-
-            // 3. 呼叫分享目標選擇器 (Share Target Picker)
-            if (liff.isApiAvailable('shareTargetPicker')) {
-              const res = await liff.shareTargetPicker([{
-                "type": "flex",
-                "altText": `這是 ${profile.value.顯示名稱 || '我'} 的電子名片，請查收！`, // 優化了替代文字
-                "contents": flexMsg.value
-              }]);
-              
-              if (res) {
-                alert("✨ 名片已成功發送到聊天室！");
-              }
-            } else {
-              // 萬一權限沒開，給予明確提示
-              alert("目前無法使用分享功能。請確認 LINE Developers Console 中是否已開啟「Share Target Picker」權限。");
-            }
-          } catch (err) {
-            console.error("分享失敗，原因:", err);
-            alert("傳送失敗，請確認資料設定是否正確，或稍後再試。");
-          }
-        };
-
-        // 記得將 shareButtonText 暴露給模板使用
         return { profile, buttons, isLoading, errorMessage, shareButtonText, shareMyCard };
       }
     }).mount('#app');
